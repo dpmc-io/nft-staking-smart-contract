@@ -939,7 +939,7 @@ contract STAKE is
         RESTRICTED_RE_STAKING = 0; // if 0 is unlimited
         MIN_APR = 15;
         MAX_APR = 20;
-        erc721token = 0xFF89A8B4164b91D5dECE398463e4f0488EdfACB3;
+        erc721token = 0x4515b54Ca126C52A5C25d98c2e5B94EDd59971Cc;
         erc20token = 0xb63683C2d9563C25F65793164a282eF82C0A03F6;
         REWARD = 0x900c6f8AAcd4AA70F1477Be27CcbbD4bf9CC011E;
         SIGNER = 0x143e5C4160Eaef1c01251D23F2A04F0b3e9d6c10;
@@ -956,11 +956,11 @@ contract STAKE is
         maxStakingPool = 0;
     }
 
-    function pause() external onlyOwner {
+    function pause() external onlyAdmin {
         _pause();
     }
 
-    function unpause() external onlyOwner {
+    function unpause() external onlyAdmin {
         _unpause();
     }
 
@@ -1017,17 +1017,17 @@ contract STAKE is
         _;
     }
 
-    function updateMaxStakingPool(
-        uint256 newMaxStakingPool
-    ) external onlyOwner {
-        uint256 previousMaxStakingPool = maxStakingPool;
-        maxStakingPool = newMaxStakingPool;
-        emit MaxStakingPoolUpdated(previousMaxStakingPool, newMaxStakingPool);
-    }
-
     function addOrRemoveAdmin(address _admin, bool _true) public onlyOwner {
         isAdmin[_admin] = _true;
         emit AdminUpdated(_admin, _true);
+    }
+
+    function updateMaxStakingPool(
+        uint256 newMaxStakingPool
+    ) external onlyAdmin {
+        uint256 previousMaxStakingPool = maxStakingPool;
+        maxStakingPool = newMaxStakingPool;
+        emit MaxStakingPoolUpdated(previousMaxStakingPool, newMaxStakingPool);
     }
 
     function updateBlacklistedAddress(
@@ -1046,52 +1046,52 @@ contract STAKE is
         emit BlacklistedTokenIdUpdated(erc721token, tokenId, _isBlacklisted);
     }
 
-    function updateForceUnstakeInDays(uint16 _days) public onlyOwner {
+    function updateForceUnstakeInDays(uint16 _days) public onlyAdmin {
         FORCED_UNSTAKE_IN_DAYS = _days;
         emit ForcedUnstakeInDaysUpdated(_days);
     }
 
-    function updateMinAPR(uint256 _minAPR) public onlyOwner {
+    function updateMinAPR(uint256 _minAPR) public onlyAdmin {
         MIN_APR = _minAPR;
         emit MinAPRUpdated(_minAPR);
     }
 
-    function updateMaxAPR(uint256 _maxAPR) public onlyOwner {
+    function updateMaxAPR(uint256 _maxAPR) public onlyAdmin {
         MAX_APR = _maxAPR;
         emit MaxAPRUpdated(_maxAPR);
     }
 
-    function updateMinStake(uint256 _mintStake) public onlyOwner {
+    function updateMinStake(uint256 _mintStake) public onlyAdmin {
         MIN_TOKEN_TO_STAKE = _mintStake;
         emit MinNFEUpdated(_mintStake);
     }
 
-    function updateRestrictedReStaking(uint16 _restrictN) public onlyOwner {
+    function updateRestrictedReStaking(uint16 _restrictN) public onlyAdmin {
         RESTRICTED_RE_STAKING = _restrictN;
         emit RestrictedReStakingUpdated(_restrictN);
     }
 
-    function updateSignerAddress(address _signerAddress) public onlyOwner {
+    function updateSignerAddress(address _signerAddress) public onlyAdmin {
         SIGNER = _signerAddress;
         emit SignerAddressUpdated(_signerAddress);
     }
 
-    function updateNFEaddress(address _nfeAddress) public onlyOwner {
+    function updateNFEaddress(address _nfeAddress) public onlyAdmin {
         erc721token = _nfeAddress;
         emit NFEAddressUpdated(_nfeAddress);
     }
 
-    function updateMNIaddress(address _mniAddress) public onlyOwner {
+    function updateMNIaddress(address _mniAddress) public onlyAdmin {
         erc20token = _mniAddress;
         emit MNIAddressUpdated(_mniAddress);
     }
 
-    function updateRewardAddress(address _rewardAddress) public onlyOwner {
+    function updateRewardAddress(address _rewardAddress) public onlyAdmin {
         REWARD = _rewardAddress;
         emit RewardAddressUpdated(_rewardAddress);
     }
 
-    function updatePercentageUsed(bool _true) public onlyOwner {
+    function updatePercentageUsed(bool _true) public onlyAdmin {
         DEFAULT_PERCENTAGE_USED = _true;
         emit PercentageUsedUpdated(_true);
     }
@@ -1349,26 +1349,21 @@ contract STAKE is
         );
     }
 
-    function forceStop(
-        uint256 stakeId,
-        uint256 exp,
-        bytes memory sig
-    ) external onlyOwner nonReentrant {
-        require(exp > block.timestamp, "Signature is expired.");
-        require(!usedSig[sig], "Signature already used");
-
-        // Verify the signature
-        bytes32 _hashedMessage = keccak256(
-            abi.encodePacked(msg.sender, stakeId, exp)
-        );
-        require(recoverSigner(_hashedMessage, sig) == SIGNER, "Invalid signer");
-
+    function forceStop(uint256 stakeId) external onlyAdmin nonReentrant {
         Stake storage stake = stakes[stakeId];
+        require(stake.endedPrice == 0, "US2: this stakeId has been unstaked.");
+
         IERC721(erc721token).safeTransferFrom(
             address(this),
             stake.staker,
             stake.tokenId
         );
+
+        INFE721 NFECERT = INFE721(erc721token);
+        uint256 tokenValue = NFECERT.tokenValue(stake.tokenId);
+
+        stake.endedPrice = 1;
+        totalStakingPool -= tokenValue;
 
         emit ForceStop(
             stakeId,
